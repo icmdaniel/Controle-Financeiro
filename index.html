@@ -103,6 +103,7 @@
             background: var(--bg);
             padding: 1rem;
             border-radius: 15px;
+            flex-wrap: wrap;
         }
 
         .dash-grid {
@@ -222,13 +223,20 @@
 
             <div id="dash" class="tab-content active">
                 <div class="month-filter">
-                    <label>Visualizar Mês:</label>
+                    <label>Filtrar Período:</label>
+                    <select id="filterPeriod" style="padding: 0.5rem; border-radius: 10px; border: 2px solid #e2e8f0; font-weight: 600; background: #fff;">
+                        <option value="mes">Por Mês</option>
+                        <option value="geral">Valores Gerais (Tudo)</option>
+                        <option value="7">Últimos 7 dias</option>
+                        <option value="15">Últimos 15 dias</option>
+                        <option value="30">Últimos 30 dias</option>
+                    </select>
                     <input type="month" id="filterMonth">
                 </div>
 
                 <div class="dash-grid">
                     <div class="dash-card full">
-                        <span>Saldo Projetado (Mês Selecionado)</span>
+                        <span>Saldo Projetado (Período Selecionado)</span>
                         <h2 id="resProj" class="text-success">R$ 0,00</h2>
                     </div>
                     <div class="dash-card">
@@ -478,7 +486,27 @@
         const brl = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
         const updateUI = () => {
+            const period = document.getElementById('filterPeriod').value;
             const selectedMonth = document.getElementById('filterMonth').value;
+            
+            if (period === 'mes') {
+                document.getElementById('filterMonth').style.display = 'inline-block';
+            } else {
+                document.getElementById('filterMonth').style.display = 'none';
+            }
+
+            const checkPeriod = (dateStr) => {
+                if (period === 'geral') return true;
+                if (period === 'mes') return dateStr.substring(0, 7) === selectedMonth;
+                const tDate = new Date(dateStr + 'T00:00:00');
+                const today = new Date();
+                today.setHours(23,59,59,999);
+                const pastDate = new Date();
+                pastDate.setDate(pastDate.getDate() - parseInt(period));
+                pastDate.setHours(0,0,0,0);
+                return tDate >= pastDate && tDate <= today;
+            };
+
             let totGastosMes = 0;
             const gastosFiltrados = [];
             const formasPagTotals = {}; 
@@ -490,11 +518,11 @@
                     for(let i=0; i < numParc; i++) {
                         let dataParc = new Date(dataInicio);
                         dataParc.setMonth(dataInicio.getMonth() + i);
-                        let mesParc = dataParc.toISOString().substring(0, 7);
-                        if (mesParc === selectedMonth) {
+                        let dataParcStr = dataParc.toISOString().substring(0, 10);
+                        if (checkPeriod(dataParcStr)) {
                             const valorParc = g.val / numParc;
                             totGastosMes += valorParc;
-                            gastosFiltrados.push({...g, displayVal: valorParc, displayData: dataParc.toISOString().split('T')[0], originalIndex: originalIndex});
+                            gastosFiltrados.push({...g, displayVal: valorParc, displayData: dataParcStr, originalIndex: originalIndex});
                             let chaveForma = g.formaPag;
                             if (chaveForma && chaveForma.startsWith('Cartão')) chaveForma = "Crédito";
                             formasPagTotals[chaveForma] = (formasPagTotals[chaveForma] || 0) + valorParc;
@@ -503,10 +531,31 @@
                 });
             }
 
-            const ganhosMes = (db.ganhos || []).filter(g => g.data.substring(0, 7) === selectedMonth);
-            const futurosMes = (db.futuros || []).filter(f => f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth);
+            const ganhosMes = (db.ganhos || []).filter(g => checkPeriod(g.data));
+            const futurosMes = (db.futuros || []).filter(f => {
+                if (period === 'mes') return f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth;
+                if (period === 'geral') return true;
+                if (f.tipo === 'fixo') {
+                    const today = new Date();
+                    const fDate = new Date(f.data + 'T00:00:00');
+                    const currentMonthCopy = new Date(today.getFullYear(), today.getMonth(), fDate.getDate()).toISOString().substring(0, 10);
+                    if (checkPeriod(currentMonthCopy)) return true;
+                    const prevMonthCopy = new Date(today.getFullYear(), today.getMonth() - 1, fDate.getDate()).toISOString().substring(0, 10);
+                    return checkPeriod(prevMonthCopy);
+                }
+                return checkPeriod(f.data);
+            });
             
-            const totGanhos = ganhosMes.reduce((s, i) => s + i.val, 0) + parseFloat(db.sal || 0);
+            let salContabilizado = 0;
+            if (period === 'mes' || period === 'geral') {
+                salContabilizado = parseFloat(db.sal || 0);
+            } else {
+                const t = new Date();
+                const d1 = new Date(t.getFullYear(), t.getMonth(), 1).toISOString().substring(0, 10);
+                if (checkPeriod(d1)) salContabilizado = parseFloat(db.sal || 0);
+            }
+
+            const totGanhos = ganhosMes.reduce((s, i) => s + i.val, 0) + salContabilizado;
             const totFuturos = futurosMes.reduce((s, i) => s + i.val, 0);
             
             const totFuturosFixos = futurosMes.filter(f => f.tipo === 'fixo').reduce((s, i) => s + i.val, 0);
@@ -523,10 +572,10 @@
             
             if (db.cartoes) {
                 db.cartoes.forEach((c, idx) => {
-                    const usadoNoCartao = (db.gastos || [])
+                    const usadoNoCartao = gastosFiltrados
                         .filter(g => g.formaPag === `Cartão ${c.desc}`)
-                        .reduce((s, i) => s + i.val, 0);
-                    const usoAtual = Math.max(0, usadoNoCartao - (c.pagamentos || 0)); 
+                        .reduce((s, i) => s + i.displayVal, 0);
+                    const usoAtual = Math.max(0, usadoNoCartao - (period === 'geral' || period === 'mes' ? (c.pagamentos || 0) : 0)); 
                     totalLimiteUsadoGeral += usoAtual;
                     const disponivel = c.val - usoAtual;
 
@@ -670,6 +719,7 @@
         
         document.getElementById('salBase').onchange = (e) => { db.sal = e.target.value || 0; save(); };
         document.getElementById('filterMonth').onchange = () => updateUI();
+        document.getElementById('filterPeriod').onchange = () => updateUI();
         document.getElementById('gDesc').onblur = (e) => { document.getElementById('gCat').value = getCategory(e.target.value); };
         document.getElementById('futDesc').onblur = (e) => { document.getElementById('futCat').value = getCategory(e.target.value); };
         document.getElementById('gForma').onchange = () => toggleParcelas();
