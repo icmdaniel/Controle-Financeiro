@@ -391,12 +391,19 @@
             <div id="investimentos" class="tab-content">
                 <h3 style="margin-bottom: 1rem;">Controle de Investimentos / Caixinhas</h3>
                 <form id="fInvestimento">
-                    <div class="form-row">
+                    <div class="form-row" style="grid-template-columns: 1.5fr 1fr 1fr 1fr;">
                         <div class="group"><label>Destino / Tipo</label><input type="text" id="invDesc" placeholder="Ex: Caixinha Nubank, CDB, Ações..." required></div>
-                        <div class="group"><label>Valor Investido</label><input type="number" step="0.01" id="invVal" required></div>
+                        <div class="group">
+                            <label>Operação</label>
+                            <select id="invTipo">
+                                <option value="investir">Investir</option>
+                                <option value="retirar">Tirar Valor</option>
+                            </select>
+                        </div>
+                        <div class="group"><label>Valor</label><input type="number" step="0.01" id="invVal" required></div>
                         <div class="group"><label>Data</label><input type="date" id="invData" required></div>
                     </div>
-                    <button type="submit" class="btn-add" style="background: var(--primary-dark)">Registrar Investimento</button>
+                    <button type="submit" class="btn-add" style="background: var(--primary-dark)">Registrar Operação</button>
                 </form>
                 <table id="tInvestimentos">
                     <thead><tr><th>Destino</th><th>Valor</th><th>Data</th><th></th></tr></thead>
@@ -799,9 +806,14 @@
         document.getElementById('fInvestimento').onsubmit = (e) => {
             e.preventDefault();
             if(!db.investimentos) db.investimentos = [];
+            let val = parseFloat(document.getElementById('invVal').value);
+            const tipo = document.getElementById('invTipo').value;
+            if (tipo === 'retirar') {
+                val = -val;
+            }
             db.investimentos.push({ 
-                desc: document.getElementById('invDesc').value, 
-                val: parseFloat(document.getElementById('invVal').value), 
+                desc: document.getElementById('invDesc').value + (tipo === 'retirar' ? ' (Retirada)' : ''), 
+                val: val, 
                 data: document.getElementById('invData').value 
             });
             e.target.reset(); save();
