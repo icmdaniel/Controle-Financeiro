@@ -219,6 +219,7 @@
                 <button class="tab-btn" onclick="openTab(event, 'ganhos')">Ganhos</button>
                 <button class="tab-btn" onclick="openTab(event, 'futuros')">Agendados</button>
                 <button class="tab-btn" onclick="openTab(event, 'cartoes')">Cartões</button>
+                <button class="tab-btn" onclick="openTab(event, 'investimentos')">Investimentos</button>
             </nav>
 
             <div id="dash" class="tab-content active">
@@ -254,6 +255,10 @@
                     <div class="dash-card">
                         <span>Limite Total Usado</span>
                         <h2 id="resCartoes" class="text-warning">R$ 0,00</h2>
+                    </div>
+                    <div class="dash-card full" style="border: 1px solid #eee;">
+                        <span>Total Investido (Período)</span>
+                        <h2 id="resInvestimentos" style="color: var(--primary-dark);">R$ 0,00</h2>
                     </div>
                     <div class="dash-card full" style="border: 1px solid #eee;">
                         <span>Agendados do Mês</span>
@@ -382,6 +387,22 @@
                     <tbody></tbody>
                 </table>
             </div>
+
+            <div id="investimentos" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Controle de Investimentos / Caixinhas</h3>
+                <form id="fInvestimento">
+                    <div class="form-row">
+                        <div class="group"><label>Destino / Tipo</label><input type="text" id="invDesc" placeholder="Ex: Caixinha Nubank, CDB, Ações..." required></div>
+                        <div class="group"><label>Valor Investido</label><input type="number" step="0.01" id="invVal" required></div>
+                        <div class="group"><label>Data</label><input type="date" id="invData" required></div>
+                    </div>
+                    <button type="submit" class="btn-add" style="background: var(--primary-dark)">Registrar Investimento</button>
+                </form>
+                <table id="tInvestimentos">
+                    <thead><tr><th>Destino</th><th>Valor</th><th>Data</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -408,7 +429,7 @@
         const provider = new GoogleAuthProvider();
 
         let currentUser = null;
-        let db = { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [] };
+        let db = { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [], investimentos: [] };
         let categoryChart = null;
         const hoje = new Date().toISOString().split('T')[0];
 
@@ -424,7 +445,7 @@
                 // CARREGAR DADOS ESPECÍFICOS DO USUÁRIO
                 onValue(ref(database, 'users/' + user.uid + '/financeData'), (snapshot) => {
                     const data = snapshot.val();
-                    db = data || { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [] };
+                    db = data || { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [], investimentos: [] };
                     updateUI();
                 });
             } else {
@@ -433,7 +454,7 @@
                 document.getElementById('logoutBtn').style.display = 'none';
                 document.getElementById('appContent').style.opacity = '0.3';
                 document.getElementById('appContent').style.pointerEvents = 'none';
-                db = { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [] };
+                db = { sal: 0, gastos: [], ganhos: [], futuros: [], cartoes: [], investimentos: [] };
                 updateUI();
             }
         });
@@ -532,6 +553,7 @@
             }
 
             const ganhosMes = (db.ganhos || []).filter(g => checkPeriod(g.data));
+            const investimentosMes = (db.investimentos || []).filter(i => checkPeriod(i.data));
             const futurosMes = (db.futuros || []).filter(f => {
                 if (period === 'mes') return f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth;
                 if (period === 'geral') return true;
@@ -557,11 +579,12 @@
 
             const totGanhos = ganhosMes.reduce((s, i) => s + i.val, 0) + salContabilizado;
             const totFuturos = futurosMes.reduce((s, i) => s + i.val, 0);
+            const totInvestimentos = investimentosMes.reduce((s, i) => s + i.val, 0);
             
             const totFuturosFixos = futurosMes.filter(f => f.tipo === 'fixo').reduce((s, i) => s + i.val, 0);
             const totFuturosUnicos = futurosMes.filter(f => f.tipo !== 'fixo').reduce((s, i) => s + i.val, 0);
 
-            const saldoAtu = totGanhos - totGastosMes - totFuturosFixos;
+            const saldoAtu = totGanhos - totGastosMes - totFuturosFixos - totInvestimentos;
             const saldoProj = saldoAtu - totFuturosUnicos;
 
             let totalLimiteUsadoGeral = 0;
@@ -606,6 +629,7 @@
             document.getElementById('resPendentes').innerText = brl(totFuturos);
             document.getElementById('resProj').innerText = brl(saldoProj);
             document.getElementById('resCartoes').innerText = brl(totalLimiteUsadoGeral);
+            document.getElementById('resInvestimentos').innerText = brl(totInvestimentos);
             document.getElementById('resProj').className = saldoProj >= 0 ? 'text-success' : 'text-danger';
             document.getElementById('salBase').value = db.sal || 0;
 
@@ -614,6 +638,7 @@
             fillTable('tGastos', gastosFiltrados);
             fillTable('tGanhos', db.ganhos || []);
             fillTable('tFuturos', db.futuros || []);
+            fillTable('tInvestimentos', db.investimentos || []);
             updateCategoryData(gastosFiltrados, futurosMes);
         };
 
@@ -767,6 +792,17 @@
                 diaFech: parseInt(document.getElementById('cDiaFech').value),
                 diaVenc: parseInt(document.getElementById('cDiaVenc').value),
                 pagamentos: 0 
+            });
+            e.target.reset(); save();
+        };
+
+        document.getElementById('fInvestimento').onsubmit = (e) => {
+            e.preventDefault();
+            if(!db.investimentos) db.investimentos = [];
+            db.investimentos.push({ 
+                desc: document.getElementById('invDesc').value, 
+                val: parseFloat(document.getElementById('invVal').value), 
+                data: document.getElementById('invData').value 
             });
             e.target.reset(); save();
         };
