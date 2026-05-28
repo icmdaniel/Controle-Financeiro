@@ -610,11 +610,11 @@
                     const disponivel = c.val - usoAtual;
 
                     tbCartoes.innerHTML += `<tr>
-                        <td>${c.desc}</td>
-                        <td>${brl(c.val)}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editCartao(${idx}, 'desc', this.innerText)">${c.desc}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editCartao(${idx}, 'val', this.innerText)">${brl(c.val)}</td>
                         <td class="${disponivel < 0 ? 'text-danger' : 'text-success'}"><b>${brl(disponivel)}</b></td>
-                        <td>Dia ${c.diaFech}</td>
-                        <td>Dia ${c.diaVenc}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editCartao(${idx}, 'diaFech', this.innerText)">${c.diaFech}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editCartao(${idx}, 'diaVenc', this.innerText)">${c.diaVenc}</td>
                         <td style="text-align:right; min-width: 120px;">
                             <button style="background: #d1fae5; color: var(--success); font-weight: 600; border: none; padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer; margin-right: 0.5rem;" onclick="pagarCartao(${idx})">Pagar</button>
                             <button class="btn-del" onclick="delCartao(${idx})">✕</button>
@@ -705,18 +705,30 @@
                         <td style="text-align:right"><button class="btn-del" onclick="del('${id}', ${originalIdx})">✕</button></td>
                     </tr>`;
                 } else if (id === 'tFuturos') {
+                    let tipoSelectHtml = `<select class="cat-select" onchange="editFuturo(${i}, 'tipo', this.value)">
+                        <option value="unico" ${item.tipo === 'unico' ? 'selected' : ''}>Único</option>
+                        <option value="fixo" ${item.tipo === 'fixo' ? 'selected' : ''}>Fixo</option>
+                    </select>`;
                     b.innerHTML += `<tr>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'desc', this.innerText)">${item.desc}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'val', this.innerText)">${brl(item.val)}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'cat', this.innerText)">${item.cat || 'Outros'}</td>
                         <td><input type="date" value="${item.data}" style="border:none;background:transparent;font-size:0.8rem;" onchange="editFuturo(${i}, 'data', this.value)"></td>
-                        <td>${item.tipo === 'fixo' ? 'Fixo' : 'Único'}</td>
+                        <td>${tipoSelectHtml}</td>
                         <td style="text-align:right"><button class="btn-del" onclick="del('${id}', ${i})">✕</button></td>
                     </tr>`;
-                } else {
+                } else if (id === 'tGanhos') {
                     b.innerHTML += `<tr>
-                        <td>${item.desc}</td><td><b>${brl(item.val)}</b></td>
-                        <td>${item.data.split('-').reverse().join('/')}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editGanho(${i}, 'desc', this.innerText)">${item.desc}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editGanho(${i}, 'val', this.innerText)">${brl(item.val)}</td>
+                        <td><input type="date" value="${item.data}" style="border:none;background:transparent;font-size:0.8rem;" onchange="editGanho(${i}, 'data', this.value)"></td>
+                        <td style="text-align:right"><button class="btn-del" onclick="del('${id}', ${i})">✕</button></td>
+                    </tr>`;
+                } else if (id === 'tInvestimentos') {
+                    b.innerHTML += `<tr>
+                        <td contenteditable="true" class="editable-cell" onblur="editInvestimento(${i}, 'desc', this.innerText)">${item.desc}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editInvestimento(${i}, 'val', this.innerText)">${brl(item.val)}</td>
+                        <td><input type="date" value="${item.data}" style="border:none;background:transparent;font-size:0.8rem;" onchange="editInvestimento(${i}, 'data', this.value)"></td>
                         <td style="text-align:right"><button class="btn-del" onclick="del('${id}', ${i})">✕</button></td>
                     </tr>`;
                 }
@@ -736,6 +748,33 @@
                 const cleanVal = parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.'));
                 if (!isNaN(cleanVal)) db.futuros[idx].val = cleanVal;
             } else { db.futuros[idx][field] = value; }
+            save();
+        };
+
+        window.editGanho = (idx, field, value) => {
+            if (field === 'val') {
+                const cleanVal = parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.'));
+                if (!isNaN(cleanVal)) db.ganhos[idx].val = cleanVal;
+            } else { db.ganhos[idx][field] = value; }
+            save();
+        };
+
+        window.editInvestimento = (idx, field, value) => {
+            if (field === 'val') {
+                const cleanVal = parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.'));
+                if (!isNaN(cleanVal)) db.investimentos[idx].val = cleanVal;
+            } else { db.investimentos[idx][field] = value; }
+            save();
+        };
+
+        window.editCartao = (idx, field, value) => {
+            if (field === 'val') {
+                const cleanVal = parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.'));
+                if (!isNaN(cleanVal)) db.cartoes[idx].val = cleanVal;
+            } else if (field === 'diaFech' || field === 'diaVenc') {
+                const cleanVal = parseInt(value.replace(/[^\d]/g, ''));
+                if (!isNaN(cleanVal)) db.cartoes[idx][field] = cleanVal;
+            } else { db.cartoes[idx][field] = value; }
             save();
         };
 
