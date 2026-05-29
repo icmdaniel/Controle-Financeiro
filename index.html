@@ -206,8 +206,9 @@
     <div class="container">
         <header>
             <h1>Finance<span style="font-weight: 300; color: var(--text-muted);">Pro</span></h1>
-            <div id="authArea">
+            <div id="authArea" style="display: flex; align-items: center; gap: 0.8rem;">
                 <button id="loginBtn" class="btn-auth">Login com Google</button>
+                <span id="userName" style="font-weight: 600; font-size: 0.9rem; display: none; color: var(--text-main);"></span>
                 <button id="logoutBtn" class="btn-auth">Sair</button>
             </div>
         </header>
@@ -468,6 +469,8 @@
             if (user) {
                 currentUser = user;
                 document.getElementById('loginBtn').style.display = 'none';
+                document.getElementById('userName').innerText = user.displayName || '';
+                document.getElementById('userName').style.display = 'inline-block';
                 document.getElementById('logoutBtn').style.display = 'block';
                 document.getElementById('appContent').style.opacity = '1';
                 document.getElementById('appContent').style.pointerEvents = 'auto';
@@ -481,6 +484,8 @@
             } else {
                 currentUser = null;
                 document.getElementById('loginBtn').style.display = 'block';
+                document.getElementById('userName').innerText = '';
+                document.getElementById('userName').style.display = 'none';
                 document.getElementById('logoutBtn').style.display = 'none';
                 document.getElementById('appContent').style.opacity = '0.3';
                 document.getElementById('appContent').style.pointerEvents = 'none';
