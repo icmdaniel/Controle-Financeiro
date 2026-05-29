@@ -220,6 +220,7 @@
                 <button class="tab-btn" onclick="openTab(event, 'futuros')">Agendados</button>
                 <button class="tab-btn" onclick="openTab(event, 'cartoes')">Cartões</button>
                 <button class="tab-btn" onclick="openTab(event, 'investimentos')">Investimentos</button>
+                <button class="tab-btn" onclick="openTab(event, 'previsoes')">Previsões</button>
             </nav>
 
             <div id="dash" class="tab-content active">
@@ -410,6 +411,28 @@
                     <tbody></tbody>
                 </table>
             </div>
+
+            <div id="previsoes" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Previsões por Mês</h3>
+                <div class="month-filter">
+                    <label>Escolher Mês para Previsão:</label>
+                    <input type="month" id="prevMonthFilter">
+                </div>
+                <div class="dash-grid">
+                    <div class="dash-card">
+                        <span>Quanto vai entrar (Renda)</span>
+                        <h2 id="prevEntradas" class="text-success">R$ 0,00</h2>
+                    </div>
+                    <div class="dash-card">
+                        <span>Quanto de gasto já tenho (Compromissos)</span>
+                        <h2 id="prevGastos" class="text-danger">R$ 0,00</h2>
+                    </div>
+                    <div class="dash-card full">
+                        <span>Quanto vai sobrar (Saldo Previsto)</span>
+                        <h2 id="prevSobrar">R$ 0,00</h2>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -478,6 +501,7 @@
 
         // --- MECANISMOS ORIGINAIS ---
         document.getElementById('filterMonth').value = hoje.substring(0, 7);
+        document.getElementById('prevMonthFilter').value = hoje.substring(0, 7);
         document.getElementById('gData').value = hoje;
         const categoriasPadrao = ["Alimentação", "Transporte", "Moradia", "Saúde", "Lazer", "Outros"];
 
@@ -647,6 +671,7 @@
             fillTable('tFuturos', db.futuros || []);
             fillTable('tInvestimentos', db.investimentos || []);
             updateCategoryData(gastosFiltrados, futurosMes);
+            updatePrevisoes();
         };
 
         const updateDatalist = () => {
@@ -685,6 +710,44 @@
                     options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
                 });
             }
+        };
+
+        const updatePrevisoes = () => {
+            const selectedMonth = document.getElementById('prevMonthFilter').value;
+            if (!selectedMonth) return;
+
+            let totGastosMes = 0;
+            if (db.gastos) {
+                db.gastos.forEach((g) => {
+                    const dataInicio = new Date(g.data + 'T00:00:00');
+                    const numParc = g.parc || 1;
+                    for(let i=0; i < numParc; i++) {
+                        let dataParc = new Date(dataInicio);
+                        dataParc.setMonth(dataInicio.getMonth() + i);
+                        let dataParcStr = dataParc.toISOString().substring(0, 10);
+                        if (dataParcStr.substring(0, 7) === selectedMonth) {
+                            totGastosMes += (g.val / numParc);
+                        }
+                    }
+                });
+            }
+
+            const ganhosMes = (db.ganhos || []).filter(g => g.data.substring(0, 7) === selectedMonth);
+            const futurosMes = (db.futuros || []).filter(f => f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth);
+            const investimentosMes = (db.investimentos || []).filter(i => i.data.substring(0, 7) === selectedMonth);
+
+            const salContabilizado = parseFloat(db.sal || 0);
+            const totGanhos = ganhosMes.reduce((s, i) => s + i.val, 0) + salContabilizado;
+            const totFuturos = futurosMes.reduce((s, i) => s + i.val, 0);
+            const totInvestimentos = investimentosMes.reduce((s, i) => s + i.val, 0);
+
+            const totalGastoCompromissos = totGastosMes + totFuturos;
+            const vaiSobrar = totGanhos - totalGastoCompromissos - totInvestimentos;
+
+            document.getElementById('prevEntradas').innerText = brl(totGanhos);
+            document.getElementById('prevGastos').innerText = brl(totalGastoCompromissos);
+            document.getElementById('prevSobrar').innerText = brl(vaiSobrar);
+            document.getElementById('prevSobrar').className = vaiSobrar >= 0 ? 'text-success' : 'text-danger';
         };
 
         const fillTable = (id, data) => {
@@ -791,6 +854,7 @@
         document.getElementById('salBase').onchange = (e) => { db.sal = e.target.value || 0; save(); };
         document.getElementById('filterMonth').onchange = () => updateUI();
         document.getElementById('filterPeriod').onchange = () => updateUI();
+        document.getElementById('prevMonthFilter').onchange = () => updatePrevisoes();
         document.getElementById('gDesc').onblur = (e) => { document.getElementById('gCat').value = getCategory(e.target.value); };
         document.getElementById('futDesc').onblur = (e) => { document.getElementById('futCat').value = getCategory(e.target.value); };
         document.getElementById('gForma').onchange = () => toggleParcelas();
