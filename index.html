@@ -139,7 +139,7 @@
         .chart-container { max-width: 300px; margin: 0 auto; }
 
         .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-        .form-row.agendados { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; transition: 0.3s; }
+        .form-row.agendados { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; }
         .form-row.gastos-grid { grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr; transition: 0.3s; }
         .form-row.com-parcela { grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr 0.6fr; }
         .form-row.cartoes-grid { grid-template-columns: 2fr 1.2fr 1fr 1fr; }
@@ -362,12 +362,7 @@
                             <select id="futTipo">
                                 <option value="unico">Único</option>
                                 <option value="fixo">Fixo Mensal</option>
-                                <option value="parcelado">Parcelado até...</option>
                             </select>
-                        </div>
-                        <div class="group" id="futDataFimGroup" style="display:none">
-                            <label>Até o Mês</label>
-                            <input type="month" id="futDataFim">
                         </div>
                     </div>
                     <button type="submit" class="btn-add" style="background: var(--warning)">Agendar Conta</button>
@@ -535,22 +530,6 @@
             }
         };
 
-        const toggleFuturo = () => {
-            const tipo = document.getElementById('futTipo').value;
-            const group = document.getElementById('futDataFimGroup');
-            const row = document.querySelector('.form-row.agendados');
-            if (tipo === 'parcelado') {
-                group.style.display = 'flex';
-                row.style.gridTemplateColumns = '1.3fr 1fr 1fr 1fr 1fr 1fr';
-                document.getElementById('futDataFim').required = true;
-            } else {
-                group.style.display = 'none';
-                row.style.gridTemplateColumns = '1.5fr 1fr 1fr 1fr 1fr';
-                document.getElementById('futDataFim').value = '';
-                document.getElementById('futDataFim').required = false;
-            }
-        };
-
         const getCategory = (desc) => {
             const d = desc.toLowerCase();
             if (d.includes('mercado') || d.includes('ifood') || d.includes('comida') || d.includes('restaurante') || d.includes('pizza')) return 'Alimentação';
@@ -612,7 +591,7 @@
             const ganhosMes = (db.ganhos || []).filter(g => checkPeriod(g.data));
             const investimentosMes = (db.investimentos || []).filter(i => checkPeriod(i.data));
             const futurosMes = (db.futuros || []).filter(f => {
-                if (period === 'mes') return f.tipo === 'fixo' || (f.tipo === 'parcelado' && selectedMonth >= f.data.substring(0, 7) && selectedMonth <= f.dataFim) || f.data.substring(0, 7) === selectedMonth;
+                if (period === 'mes') return f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth;
                 if (period === 'geral') return true;
                 if (f.tipo === 'fixo') {
                     const today = new Date();
@@ -621,24 +600,6 @@
                     if (checkPeriod(currentMonthCopy)) return true;
                     const prevMonthCopy = new Date(today.getFullYear(), today.getMonth() - 1, fDate.getDate()).toISOString().substring(0, 10);
                     return checkPeriod(prevMonthCopy);
-                }
-                if (f.tipo === 'parcelado') {
-                    const today = new Date();
-                    const fDate = new Date(f.data + 'T00:00:00');
-                    const startMonth = f.data.substring(0, 7);
-                    const endMonth = f.dataFim;
-                    const currentMonthStr = today.toISOString().substring(0, 7);
-                    if (currentMonthStr >= startMonth && currentMonthStr <= endMonth) {
-                        const currentMonthCopy = new Date(today.getFullYear(), today.getMonth(), fDate.getDate()).toISOString().substring(0, 10);
-                        if (checkPeriod(currentMonthCopy)) return true;
-                    }
-                    const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                    const prevMonthStr = prevMonth.toISOString().substring(0, 7);
-                    if (prevMonthStr >= startMonth && prevMonthStr <= endMonth) {
-                        const prevMonthCopy = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), fDate.getDate()).toISOString().substring(0, 10);
-                        return checkPeriod(prevMonthCopy);
-                    }
-                    return false;
                 }
                 return checkPeriod(f.data);
             });
@@ -670,7 +631,7 @@
             
             if (db.cartoes) {
                 db.cartoes.forEach((c, idx) => {
-                    const usado NoCartaoGlobal = (db.gastos || [])
+                    const usadoNoCartaoGlobal = (db.gastos || [])
                         .filter(g => g.formaPag === `Cartão ${c.desc}`)
                         .reduce((s, i) => s + i.val, 0);
                     const usoAtual = Math.max(0, usadoNoCartaoGlobal - (c.pagamentos || 0)); 
@@ -777,7 +738,7 @@
             }
 
             const ganhosMes = (db.ganhos || []).filter(g => g.data.substring(0, 7) === selectedMonth);
-            const futurosMes = (db.futuros || []).filter(f => f.tipo === 'fixo' || (f.tipo === 'parcelado' && selectedMonth >= f.data.substring(0, 7) && selectedMonth <= f.dataFim) || f.data.substring(0, 7) === selectedMonth);
+            const futurosMes = (db.futuros || []).filter(f => f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth);
             const investimentosMes = (db.investimentos || []).filter(i => i.data.substring(0, 7) === selectedMonth);
 
             const salContabilizado = parseFloat(db.sal || 0);
@@ -815,10 +776,9 @@
                     let tipoSelectHtml = `<select class="cat-select" onchange="editFuturo(${i}, 'tipo', this.value)">
                         <option value="unico" ${item.tipo === 'unico' ? 'selected' : ''}>Único</option>
                         <option value="fixo" ${item.tipo === 'fixo' ? 'selected' : ''}>Fixo</option>
-                        <option value="parcelado" ${item.tipo === 'parcelado' ? 'selected' : ''}>Parcelado</option>
                     </select>`;
                     b.innerHTML += `<tr>
-                        <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'desc', this.innerText)">${item.desc} ${item.tipo === 'parcelado' ? `<small>(Até ${item.dataFim})</small>` : ''}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'desc', this.innerText)">${item.desc}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'val', this.innerText)">${brl(item.val)}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'cat', this.innerText)">${item.cat || 'Outros'}</td>
                         <td><input type="date" value="${item.data}" style="border:none;background:transparent;font-size:0.8rem;" onchange="editFuturo(${i}, 'data', this.value)"></td>
@@ -903,7 +863,6 @@
         document.getElementById('gDesc').onblur = (e) => { document.getElementById('gCat').value = getCategory(e.target.value); };
         document.getElementById('futDesc').onblur = (e) => { document.getElementById('futCat').value = getCategory(e.target.value); };
         document.getElementById('gForma').onchange = () => toggleParcelas();
-        document.getElementById('futTipo').onchange = () => toggleFuturo();
 
         document.getElementById('fGasto').onsubmit = (e) => {
             e.preventDefault();
@@ -934,10 +893,9 @@
                 val: parseFloat(document.getElementById('futVal').value), 
                 data: document.getElementById('futData').value, 
                 tipo: document.getElementById('futTipo').value, 
-                dataFim: document.getElementById('futDataFim').value || '',
                 cat: document.getElementById('futCat').value || 'Outros' 
             });
-            e.target.reset(); toggleFuturo(); save();
+            e.target.reset(); save();
         };
         
         document.getElementById('fCartao').onsubmit = (e) => {
