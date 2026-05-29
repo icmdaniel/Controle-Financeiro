@@ -139,13 +139,14 @@
         .chart-container { max-width: 300px; margin: 0 auto; }
 
         .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-        .form-row.agendados { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; }
+        .form-row.agendados { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; transition: 0.3s; }
+        .form-row.agendados.com-parcela { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 0.6fr; }
         .form-row.gastos-grid { grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr; transition: 0.3s; }
         .form-row.com-parcela { grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr 0.6fr; }
         .form-row.cartoes-grid { grid-template-columns: 2fr 1.2fr 1fr 1fr; }
 
         @media (max-width: 600px) { 
-            .form-row, .form-row.agendados, .form-row.gastos-grid, .form-row.com-parcela, .form-row.cartoes-grid { grid-template-columns: 1fr !important; } 
+            .form-row, .form-row.agendados, .form-row.gastos-grid, .form-row.com-parcela, .form-row.cartoes-grid, .form-row.agendados.com-parcela { grid-template-columns: 1fr !important; } 
             .dash-grid { grid-template-columns: 1fr; } 
             .dash-card.full { grid-column: span 1; }
             .chart-section { grid-template-columns: 1fr; }
@@ -351,7 +352,7 @@
                 <form id="fFuturo">
                     <div class="form-row agendados">
                         <div class="group"><label>Conta</label><input type="text" id="futDesc" required></div>
-                        <div class="group"><label>Valor</label><input type="number" step="0.01" id="futVal" required></div>
+                        <div class="group"><label>Valor Total</label><input type="number" step="0.01" id="futVal" required></div>
                         <div class="group">
                             <label>Categoria</label>
                             <input type="text" id="futCat" list="listCategorias" placeholder="Categoria" required>
@@ -362,13 +363,18 @@
                             <select id="futTipo">
                                 <option value="unico">Único</option>
                                 <option value="fixo">Fixo Mensal</option>
+                                <option value="parcelado">Parcelado</option>
                             </select>
+                        </div>
+                        <div class="group" id="futParcGroup" style="display:none">
+                            <label>Parcelas</label>
+                            <input type="number" id="futParc" value="1" min="1" max="48">
                         </div>
                     </div>
                     <button type="submit" class="btn-add" style="background: var(--warning)">Agendar Conta</button>
                 </form>
                 <table id="tFuturos">
-                    <thead><tr><th>Conta</th><th>Valor</th><th>Categoria</th><th>Vencimento</th><th>Recorrência</th><th></th></tr></thead>
+                    <thead><tr><th>Conta</th><th>Valor Total</th><th>Categoria</th><th>Vencimento</th><th>Recorrência</th><th></th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
@@ -530,6 +536,20 @@
             }
         };
 
+        const toggleParcelasFuturos = () => {
+            const tipo = document.getElementById('futTipo').value;
+            const group = document.getElementById('futParcGroup');
+            const row = document.getElementById('fFuturo').querySelector('.form-row.agendados');
+            if (tipo === 'parcelado') {
+                group.style.display = 'flex';
+                row.classList.add('com-parcela');
+            } else {
+                group.style.display = 'none';
+                row.classList.remove('com-parcela');
+                document.getElementById('futParc').value = 1;
+            }
+        };
+
         const getCategory = (desc) => {
             const d = desc.toLowerCase();
             if (d.includes('mercado') || d.includes('ifood') || d.includes('comida') || d.includes('restaurante') || d.includes('pizza')) return 'Alimentação';
@@ -590,19 +610,52 @@
 
             const ganhosMes = (db.ganhos || []).filter(g => checkPeriod(g.data));
             const investimentosMes = (db.investimentos || []).filter(i => checkPeriod(i.data));
-            const futurosMes = (db.futuros || []).filter(f => {
-                if (period === 'mes') return f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth;
-                if (period === 'geral') return true;
-                if (f.tipo === 'fixo') {
-                    const today = new Date();
-                    const fDate = new Date(f.data + 'T00:00:00');
-                    const currentMonthCopy = new Date(today.getFullYear(), today.getMonth(), fDate.getDate()).toISOString().substring(0, 10);
-                    if (checkPeriod(currentMonthCopy)) return true;
-                    const prevMonthCopy = new Date(today.getFullYear(), today.getMonth() - 1, fDate.getDate()).toISOString().substring(0, 10);
-                    return checkPeriod(prevMonthCopy);
-                }
-                return checkPeriod(f.data);
-            });
+            
+            const futurosMes = [];
+            if (db.futuros) {
+                db.futuros.forEach((f) => {
+                    if (f.tipo === 'fixo') {
+                        let match = false;
+                        let dStr = f.data;
+                        if (period === 'mes') match = true;
+                        else if (period === 'geral') match = true;
+                        else {
+                            const today = new Date();
+                            const fDate = new Date(f.data + 'T00:00:00');
+                            const currentMonthCopy = new Date(today.getFullYear(), today.getMonth(), fDate.getDate()).toISOString().substring(0, 10);
+                            if (checkPeriod(currentMonthCopy)) { match = true; dStr = currentMonthCopy; }
+                            else {
+                                const prevMonthCopy = new Date(today.getFullYear(), today.getMonth() - 1, fDate.getDate()).toISOString().substring(0, 10);
+                                if (checkPeriod(prevMonthCopy)) { match = true; dStr = prevMonthCopy; }
+                            }
+                        }
+                        if (match) futurosMes.push({...f, val: f.val, data: dStr});
+                    } else if (f.tipo === 'parcelado') {
+                        const dataInicio = new Date(f.data + 'T00:00:00');
+                        const numParc = f.parc || 1;
+                        for(let i=0; i < numParc; i++) {
+                            let dataParc = new Date(dataInicio);
+                            dataParc.setMonth(dataInicio.getMonth() + i);
+                            let dataParcStr = dataParc.toISOString().substring(0, 10);
+                            let match = false;
+                            if (period === 'mes') match = (dataParcStr.substring(0, 7) === selectedMonth);
+                            else if (period === 'geral') match = true;
+                            else match = checkPeriod(dataParcStr);
+                            
+                            if (match) {
+                                futurosMes.push({...f, val: f.val / numParc, data: dataParcStr, desc: `${f.desc} (${i+1}/${numParc})`});
+                            }
+                        }
+                    } else {
+                        let match = false;
+                        if (period === 'mes') match = (f.data.substring(0, 7) === selectedMonth);
+                        else if (period === 'geral') match = true;
+                        else match = checkPeriod(f.data);
+                        
+                        if (match) futurosMes.push({...f});
+                    }
+                });
+            }
             
             let salContabilizado = 0;
             if (period === 'mes' || period === 'geral') {
@@ -738,7 +791,28 @@
             }
 
             const ganhosMes = (db.ganhos || []).filter(g => g.data.substring(0, 7) === selectedMonth);
-            const futurosMes = (db.futuros || []).filter(f => f.tipo === 'fixo' || f.data.substring(0, 7) === selectedMonth);
+            
+            const futurosMes = [];
+            if (db.futuros) {
+                db.futuros.forEach(f => {
+                    if (f.tipo === 'fixo') {
+                        futurosMes.push({...f});
+                    } else if (f.tipo === 'parcelado') {
+                        const dataInicio = new Date(f.data + 'T00:00:00');
+                        const numParc = f.parc || 1;
+                        for(let i=0; i < numParc; i++) {
+                            let dataParc = new Date(dataInicio);
+                            dataParc.setMonth(dataInicio.getMonth() + i);
+                            if (dataParc.toISOString().substring(0, 7) === selectedMonth) {
+                                futurosMes.push({...f, val: f.val / numParc});
+                            }
+                        }
+                    } else if (f.data.substring(0, 7) === selectedMonth) {
+                        futurosMes.push({...f});
+                    }
+                });
+            }
+
             const investimentosMes = (db.investimentos || []).filter(i => i.data.substring(0, 7) === selectedMonth);
 
             const salContabilizado = parseFloat(db.sal || 0);
@@ -776,9 +850,10 @@
                     let tipoSelectHtml = `<select class="cat-select" onchange="editFuturo(${i}, 'tipo', this.value)">
                         <option value="unico" ${item.tipo === 'unico' ? 'selected' : ''}>Único</option>
                         <option value="fixo" ${item.tipo === 'fixo' ? 'selected' : ''}>Fixo</option>
+                        <option value="parcelado" ${item.tipo === 'parcelado' ? 'selected' : ''}>Parcelado</option>
                     </select>`;
                     b.innerHTML += `<tr>
-                        <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'desc', this.innerText)">${item.desc}</td>
+                        <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'desc', this.innerText)">${item.desc} ${item.parc > 1 ? `<small>(${item.parc}x)</small>` : ''}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'val', this.innerText)">${brl(item.val)}</td>
                         <td contenteditable="true" class="editable-cell" onblur="editFuturo(${i}, 'cat', this.innerText)">${item.cat || 'Outros'}</td>
                         <td><input type="date" value="${item.data}" style="border:none;background:transparent;font-size:0.8rem;" onchange="editFuturo(${i}, 'data', this.value)"></td>
@@ -863,6 +938,7 @@
         document.getElementById('gDesc').onblur = (e) => { document.getElementById('gCat').value = getCategory(e.target.value); };
         document.getElementById('futDesc').onblur = (e) => { document.getElementById('futCat').value = getCategory(e.target.value); };
         document.getElementById('gForma').onchange = () => toggleParcelas();
+        document.getElementById('futTipo').onchange = () => toggleParcelasFuturos();
 
         document.getElementById('fGasto').onsubmit = (e) => {
             e.preventDefault();
@@ -893,9 +969,10 @@
                 val: parseFloat(document.getElementById('futVal').value), 
                 data: document.getElementById('futData').value, 
                 tipo: document.getElementById('futTipo').value, 
-                cat: document.getElementById('futCat').value || 'Outros' 
+                cat: document.getElementById('futCat').value || 'Outros',
+                parc: parseInt(document.getElementById('futParc').value) || 1
             });
-            e.target.reset(); save();
+            e.target.reset(); document.getElementById('futData').value = hoje; toggleParcelasFuturos(); save();
         };
         
         document.getElementById('fCartao').onsubmit = (e) => {
